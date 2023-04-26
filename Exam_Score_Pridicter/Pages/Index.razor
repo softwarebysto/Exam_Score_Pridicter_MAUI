@@ -1,0 +1,127 @@
+﻿
+@page "/"
+@using System.Text.Json;
+<div class="main-wrapper">
+    <div class="centered">
+        @if (!_predictionSuccessful && !_showLoading)
+        {
+            <div class="actions-wrapper">
+                
+                <div>
+                    <input @bind-value="hours" class="input-style-intput" @oninput="InPutChanged" placeholder="Number of hours studied" type="number" maxlength="2" max="24" min="0"/>
+                    @if (_hourError)
+                    {   <br />     
+                        <span style="color:red;font-size:smaller;">Number of hours studied must be between 1 and 20.26</span>                    
+                    }else{}                                
+                </div>
+                <div>
+                    <input @bind-value="courses" class="input-style-intput" @oninput="InPutChangedCourses" placeholder="Number of courses studied" type="number" maxlength="2" max="24" min="0"/>
+                    @if (_coursesError)
+                    {   <br />                 
+                        <span style="color:red; font-size:smaller;">Number of hours courses must be between 1 and 19</span>
+                    }else{}                                
+                </div>
+
+                <button class="button-style" @onclick="PredictScore">Predict score</button>
+            </div>
+        }
+        else if (_showLoading)
+        {
+
+            <span>
+                <img class="loading-pic" src="/assets/pictures/loading.gif">
+            </span>  
+        }
+        else if(_predictionSuccessful)
+        {
+            <div class="actions-wrapper">
+                <div class="score-div">
+                    <span class="score-text"> @prediction </span> <span style="color:white; font-size:35px; width: fit-content;">pts</span>                     
+                </div>                                                
+                <button class="button-style" @onclick="RePredict">Predict again</button>
+            </div>
+        }
+    </div>
+</div>
+    
+@code{
+    public double? hours;
+    public bool _hourError;    
+    public bool _showLoading;
+
+    public int? courses;
+    public double prediction;
+    public bool _coursesError;   
+    public bool _predictionSuccessful;
+    Random rnd = new Random();
+
+
+
+    public async void PredictScore()
+    {
+
+        _hourError = hours > 0 && hours <= 20.26 ? false : true;
+        _coursesError = courses > 0 && courses <= 19 ? false : true;
+        if (!_hourError && !_coursesError)
+        {
+            _showLoading = true;
+            try
+            {
+                HttpClient client = new HttpClient();
+                client.Timeout = TimeSpan.FromMinutes(1);                
+                var url = $"https://app.unis.uz/marks?study_hours={hours}&course_number={courses}";                
+
+                HttpResponseMessage httpResponse = await client.GetAsync(url);
+                string content = await httpResponse.Content.ReadAsStringAsync();
+                var responseStatus = httpResponse.StatusCode;
+                if (responseStatus == System.Net.HttpStatusCode.OK)
+                {
+                    var data = JsonSerializer.Deserialize<ResponseModal>(content);
+                    if (data != null)
+                    {
+                        prediction = data.predicted_mark;                    
+                        prediction = Math.Round(prediction * 100) / 100;
+                        _predictionSuccessful = true;
+                        _showLoading = false;
+                    }
+                }else{}
+            }
+            catch (Exception e)
+            {
+                ///TODO error handling to show user
+            }
+        }
+        else        
+            _predictionSuccessful = false;             
+        StateHasChanged();
+    }
+    public void RePredict(){
+        _predictionSuccessful = false;
+    }
+    public void InPutChanged(ChangeEventArgs e)
+    {
+
+        if (e.Value!=null)
+        {
+            if (double.TryParse(e?.Value?.ToString(), out double hours))            
+                _hourError = hours > 0 && hours <= 20.26 ? false : true;            
+            else            
+                _hourError = false;           
+        }
+    }
+    public void InPutChangedCourses(ChangeEventArgs e)
+    {
+        if (e.Value!=null)
+        {
+            if (int.TryParse(e?.Value?.ToString(), out int courses))
+                _coursesError = courses > 0 && courses <= 19 ? false : true;
+            else
+                _coursesError = false;
+        }     
+    } 
+
+    public class ResponseModal
+    {
+        public double predicted_mark { get; set; }
+    }
+}
